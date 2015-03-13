@@ -97,6 +97,56 @@ def rand_lab(patient):
     print 'Created Procedure (Sequencing Lab)'
     return save_resource('Procedure', data)
 
+    
+def rand_rx(patient):
+    data = {
+      "resourceType": "MedicationPrescription",
+      "text": {
+        "status": "generated",
+        "div": "<div>\n      <p>Penicillin VK 5ml suspension to be administered by oral route</p>\n      <p>ONE 5ml spoonful to be taken THREE times a day</p>\n      <p>100ml bottle</p>\n      <p>to patient ref: a23</p>\n      <p>by doctor X</p>\n    </div>"
+      },
+      "status": "active",
+      "patient": patient.get_reference(),
+      "medication": {
+        "reference": "Medication/example"
+      },
+      "dosageInstruction": [
+        {
+          "timingSchedule": {
+            "repeat": {
+              "frequency": 3,
+              "duration": 1,
+              "units": "d"
+            }
+          },
+          "route": {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "394899003",
+                "display": "oral administration of treatment"
+              }
+            ]
+          },
+          "doseQuantity": {
+            "value": 5,
+            "units": "ml",
+            "system": "http://unitsofmeasure.org",
+            "code": "ml"
+          }
+        }
+      ],
+      "dispense": {
+        "quantity": {
+          "value": 100,
+          "units": "ml",
+          "system": "http://unitsofmeasure.org",
+          "code": "ml"
+        }
+      }
+    }
+    print 'Created Medication Prescription'
+    return save_resource('MedicationPrescription', data)
 
 def load_patients_by_samples(samples):
     return {sample: rand_patient() for sample in samples}
@@ -107,6 +157,9 @@ def load_labs_by_patients(patients):
     return {sample: rand_lab(patients[sample])
         for sample in patients.keys()}
 
+def load_meds_by_patients(patients):
+    return {sample: rand_rx(patients[sample])
+        for sample in patients.keys()}
 
 def rand_conditions(patient):
     '''
@@ -168,6 +221,7 @@ def load_vcf_example(vcf_file):
     reader = VCFReader(filename=vcf_file)
     patients = load_patients_by_samples(reader.samples)
     db.session.commit()
+    meds = load_meds_by_patients(patients)
     labs = load_labs_by_patients(patients)
     db.session.commit()
     conditions = load_conditions_by_patients(patients)
