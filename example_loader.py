@@ -14,6 +14,26 @@ import os
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
 
 RELIABILITIES = ['questionable', 'ongoing', 'ok', 'calibrating', 'early']
+CYP2C19_STAR_VARIANTS = [
+  {
+    'gene' : {
+      'display': 'CYP2C19 Gene',
+      'code': '124020',
+      'system': 'http://www.ncbi.nlm.nih.gov/omim'
+    }, 
+    'value' : ['*1/*1', '*2/*17']
+  }
+  ]
+
+SLCO1B1_SNPS = [
+  {
+    'id': 'rs4149056',
+    'chrom': '12',
+    'pos': 21178615,
+    'value': ['T/T', 'C/C', 'C/T']
+  }
+]
+  
 INTERPRETATIONS = [
     {
         'code': 'L',
@@ -103,48 +123,32 @@ def rand_rx(patient):
       "resourceType": "MedicationPrescription",
       "text": {
         "status": "generated",
-        "div": "<div>\n      <p>Penicillin VK 5ml suspension to be administered by oral route</p>\n      <p>ONE 5ml spoonful to be taken THREE times a day</p>\n      <p>100ml bottle</p>\n      <p>to patient ref: a23</p>\n      <p>by doctor X</p>\n    </div>"
+        "div": "<div>simvastatin 20mg, 1/day</div>"
       },
       "status": "active",
       "patient": patient.get_reference(),
       "medication": {
-        "reference": "Medication/example"
+        "reference": "Medication/simvastatin"
       },
       "dosageInstruction": [
-        {
-          "timingSchedule": {
-            "repeat": {
-              "frequency": 3,
-              "duration": 1,
-              "units": "d"
-            }
-          },
-          "route": {
-            "coding": [
-              {
-                "system": "http://snomed.info/sct",
-                "code": "394899003",
-                "display": "oral administration of treatment"
+          {
+            "timingSchedule": {
+              "repeat": {
+                "frequency": 1,
+                "duration": 1,
+                "units": "d"
               }
-            ]
-          },
-          "doseQuantity": {
-            "value": 5,
-            "units": "ml",
-            "system": "http://unitsofmeasure.org",
-            "code": "ml"
+            },
+            "doseQuantity": {
+              "value": 20.0,
+              "units": "mg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mg"
+            }
           }
-        }
-      ],
-      "dispense": {
-        "quantity": {
-          "value": 100,
-          "units": "ml",
-          "system": "http://unitsofmeasure.org",
-          "code": "ml"
-        }
-      }
+        ]
     }
+
     print 'Created Medication Prescription'
     return save_resource('MedicationPrescription', data)
 
@@ -159,6 +163,10 @@ def load_labs_by_patients(patients):
 
 def load_meds_by_patients(patients):
     return {sample: rand_rx(patients[sample])
+        for sample in patients.keys()}
+        
+def load_star_variants_by_patients(patients, star_variant_list):
+    return {sample: make_star_variant(patients[sample], star_variant_list)
         for sample in patients.keys()}
 
 def rand_conditions(patient):
@@ -177,6 +185,23 @@ def rand_conditions(patient):
 
     return ret
 
+def make_star_variant(patient, star_variant_list):
+    random_result = random.choice(star_variant_list);
+    observation = {
+        'resourceType': 'Observation',
+        'subject': patient.get_reference(),
+        'name': {
+            'coding': [random_result['gene']]
+        },
+        'valueString': random.choice(random_result['value']),
+        'status': 'final',
+        'reliability': random.choice(RELIABILITIES)
+    }
+    print 'Created Observation (Genetic Star Variant Observation)'
+    print observation
+    return save_resource('Observation', observation)
+
+    
 def make_observation(condition, sequence, patient, seq_id):
     observation = {
         'resourceType': 'Observation',
@@ -216,15 +241,52 @@ def load_conditions_by_patients(patients):
     return {sample: rand_conditions(patients[sample])
         for sample in patients.keys()}
 
+        
+def create_snp_result(patient, lab, snp_list):
+    snp = random.choice(snp_list)
+    sequence_tmpl = {
+        'text': {'status': 'generated'},
+        'resourceType': 'Sequence',
+        'type': 'dna',
+        'chromosome': snp['chrom'],
+        'startPosition': snp['pos'],
+        'endPosition': snp['pos'],
+        'assembly': 'GRCh37',
+        'source': {'sample': 'somatic'}
+    }
+    
+    seq_data = dict(sequence_tmpl)
+    reads = random.choice(snp['value'])
+    seq_data['read'] = reads.split('/')
+    # links sequence to patient and lab
+    referenced_patient = patient
+    referenced_lab = lab
+    seq_data['quality'] = 68.33
+    seq_data['patient'] = patient.get_reference()
+    seq_data['source']['lab'] = referenced_lab.get_reference()
+    # get name of the variant
+    variant_id = snp['id']
+    variant = variant_id if variant_id is not None else 'anonymous variant'
+    seq_data['text']['div']  = '<div>Genotype of %s is %s</div>'% (variant, reads)
+    print seq_data
+    sequence = save_resource('Sequence', seq_data)
+    print 'Created SNP at %s:%s  %s'% (snp['chrom'], snp['pos'], seq_data['text']['div'])
+    
+def load_snps_by_patients(patients, labs, snp_list):
+    return {sample: create_snp_result(patients[sample], labs[sample], snp_list)
+        for sample in patients.keys()}
 
 def load_vcf_example(vcf_file):
     reader = VCFReader(filename=vcf_file)
     patients = load_patients_by_samples(reader.samples)
     db.session.commit()
     meds = load_meds_by_patients(patients)
+    load_star_variants_by_patients(patients, CYP2C19_STAR_VARIANTS)
     labs = load_labs_by_patients(patients)
     db.session.commit()
     conditions = load_conditions_by_patients(patients)
+    db.session.commit()
+    load_snps_by_patients(patients, labs, SLCO1B1_SNPS)
     db.session.commit()
     count = 0
     for record in reader:
@@ -261,8 +323,9 @@ def load_vcf_example(vcf_file):
             variant_id = record.ID
             variant = variant_id if variant_id is not None else 'anonymous variant'
             seq_data['text']['div']  = '<div>Genotype of %s is %s</div>'% (variant, reads)
+            #print seq_data
             sequence = save_resource('Sequence', seq_data)
-            print 'Created Sequence at %s:%s-%s'% (record.CHROM, record.POS, record.end)
+            print 'Created Sequence at %s:%s-%s  %s'% (record.CHROM, record.POS, record.end, seq_data['text']['div'])
 
             # randomly link a DNA sequence to conditions that the user has
             if (len(conditions[sample_id]) > 0 and
