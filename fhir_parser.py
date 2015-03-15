@@ -163,35 +163,42 @@ class FHIRElement(object):
 
         for parent in elem_parents:
             if not isinstance(parent, dict):
+                print 'not is instance'
                 return False
 
             elem = parent.get(elem_name)
 
             if elem is None:
                 if self.min_occurs > 0:
+                    print 'min_occurs > 0'
                     return False
                 continue
 
             if isinstance(elem, list):
                 if self.max_occurs != "*":
+                    print 'max_occurs not *'
                     return False
 
                 elems = elem
                 for i, elem in enumerate(elems):
                     if not self.validate_elem(elem):
                         if not self.correctible:
+                            print 'enum elem and not correctible'
                             return False
 
                         corrected = correct_element(elem, self.elem_types)
                         if corrected is not None:
                             elems[i] = corrected
+                        print 'enum elem and not corrected'
                         return False
 
             elif self.max_occurs == '*' and not self.correctible:
+                print 'max_occurs = * and not correctible'
                 return False
 
             elif not self.validate_elem(elem):
                 if not self.correctible:
+                    print('validate elem and not correctible (%s)', elem)
                     return False
 
                 corrected = correct_element(elem, self.elem_types)
@@ -201,6 +208,7 @@ class FHIRElement(object):
                     else:
                         parent[elem_name] = corrected
                 else:
+                    print 'elem validate fail, not corrected'
                     return False
             elif self.max_occurs == '*':
                 # in this case, the elem itself is correct, with a cardinality
@@ -214,6 +222,7 @@ class FHIRElement(object):
             if elem_type in FHIR_PRIMITIVE_VALIDATORS:
                 validate_func = FHIR_PRIMITIVE_VALIDATORS[elem_type]
                 if not validate_func(elem):
+                    print('Failed validate_elem for elem in type %s', elem_type)
                     return False
                 else:
                     continue
