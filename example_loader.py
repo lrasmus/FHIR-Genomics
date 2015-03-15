@@ -33,6 +33,17 @@ SLCO1B1_SNPS = [
     'value': ['T/T', 'C/C', 'C/T']
   }
 ]
+
+CYP2C19_SNPS = [
+  {'id': 'rs4244285', 'chrom': '10', 'pos': 94781859 },
+  {'id': 'rs4986893', 'chrom': '10', 'pos': 94780653 },
+  {'id': 'rs28399504', 'chrom': '10', 'pos': 94762706 },
+  {'id': 'rs56337013', 'chrom': '10', 'pos': 94852738 },
+  {'id': 'rs72552267', 'chrom': '10', 'pos': 94775453 },
+  {'id': 'rs72558186', 'chrom': '10', 'pos': 94781999 },
+  {'id': 'rs41291556', 'chrom': '10', 'pos': 94775416 },
+  {'id': 'rs12248560', 'chrom': '10', 'pos': 94761900 },
+]
   
 INTERPRETATIONS = [
     {
@@ -118,12 +129,47 @@ def rand_lab(patient):
     return save_resource('Procedure', data)
 
     
-def rand_rx(patient):
+#def rand_rx(patient):
+def clopdigorel_rx(patient, dose):
     data = {
       "resourceType": "MedicationPrescription",
       "text": {
         "status": "generated",
-        "div": "<div>simvastatin 20mg, 1/day</div>"
+        "div": "<div>clopidogrel " + dose + "mg, 1/day</div>"
+      },
+      "status": "active",
+      "patient": patient.get_reference(),
+      "medication": {
+        "reference": "Medication/clopidogrel"
+      },
+      "dosageInstruction": [
+          {
+            "timingSchedule": {
+              "repeat": {
+                "frequency": 1,
+                "duration": 1,
+                "units": "d"
+              }
+            },
+            "doseQuantity": {
+              "value": float(dose),
+              "units": "mg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mg"
+            }
+          }
+        ]
+    }
+
+    print 'Created Medication Prescription'
+    return save_resource('MedicationPrescription', data)
+
+def simvastatin_rx(patient, dose):
+    data = {
+      "resourceType": "MedicationPrescription",
+      "text": {
+        "status": "generated",
+        "div": "<div>simvastatin " + dose + "mg, 1/day</div>"
       },
       "status": "active",
       "patient": patient.get_reference(),
@@ -140,7 +186,7 @@ def rand_rx(patient):
               }
             },
             "doseQuantity": {
-              "value": 20.0,
+              "value": float(dose),
               "units": "mg",
               "system": "http://unitsofmeasure.org",
               "code": "mg"
@@ -151,7 +197,7 @@ def rand_rx(patient):
 
     print 'Created Medication Prescription'
     return save_resource('MedicationPrescription', data)
-
+    
 def load_patients_by_samples(samples):
     return {sample: rand_patient() for sample in samples}
 
@@ -161,13 +207,13 @@ def load_labs_by_patients(patients):
     return {sample: rand_lab(patients[sample])
         for sample in patients.keys()}
 
-def load_meds_by_patients(patients):
-    return {sample: rand_rx(patients[sample])
-        for sample in patients.keys()}
+#def load_meds_by_patients(patients):
+#    return {sample: rand_rx(patients[sample])
+#        for sample in patients.keys()}
         
-def load_star_variants_by_patients(patients, star_variant_list):
+'''def load_star_variants_by_patients(patients, star_variant_list):
     return {sample: make_star_variant(patients[sample], star_variant_list)
-        for sample in patients.keys()}
+        for sample in patients.keys()}'''
 
 def rand_conditions(patient):
     '''
@@ -185,7 +231,7 @@ def rand_conditions(patient):
 
     return ret
 
-def make_star_variant(patient, star_variant_list):
+'''def make_star_variant(patient, star_variant_list):
     random_result = random.choice(star_variant_list);
     observation = {
         'resourceType': 'Observation',
@@ -194,6 +240,21 @@ def make_star_variant(patient, star_variant_list):
             'coding': [random_result['gene']]
         },
         'valueString': random.choice(random_result['value']),
+        'status': 'final',
+        'reliability': random.choice(RELIABILITIES)
+    }
+    print 'Created Observation (Genetic Star Variant Observation)'
+    print observation
+    return save_resource('Observation', observation)'''
+    
+def make_star_variant(patient, gene, value):
+    observation = {
+        'resourceType': 'Observation',
+        'subject': patient.get_reference(),
+        'name': {
+            'coding': [gene]
+        },
+        'valueString': value,
         'status': 'final',
         'reliability': random.choice(RELIABILITIES)
     }
@@ -242,7 +303,7 @@ def load_conditions_by_patients(patients):
         for sample in patients.keys()}
 
         
-def create_snp_result(patient, lab, snp_list):
+'''def create_snp_result(patient, lab, snp_list):
     snp = random.choice(snp_list)
     sequence_tmpl = {
         'text': {'status': 'generated'},
@@ -252,7 +313,8 @@ def create_snp_result(patient, lab, snp_list):
         'startPosition': snp['pos'],
         'endPosition': snp['pos'],
         'assembly': 'GRCh37',
-        'source': {'sample': 'somatic'}
+        'source': {'sample': 'somatic'},
+        'snp': snp['id']
     }
     
     seq_data = dict(sequence_tmpl)
@@ -270,12 +332,69 @@ def create_snp_result(patient, lab, snp_list):
     seq_data['text']['div']  = '<div>Genotype of %s is %s</div>'% (variant, reads)
     print seq_data
     sequence = save_resource('Sequence', seq_data)
+    print 'Created SNP at %s:%s  %s'% (snp['chrom'], snp['pos'], seq_data['text']['div'])'''
+    
+def create_snp_result(patient, lab, snp, reads):
+    sequence_tmpl = {
+        'text': {'status': 'generated'},
+        'resourceType': 'Sequence',
+        'type': 'dna',
+        'chromosome': snp['chrom'],
+        'startPosition': snp['pos'],
+        'endPosition': snp['pos'],
+        'assembly': 'GRCh37',
+        'source': {'sample': 'somatic'},
+        'snp': snp['id']
+    }
+    
+    seq_data = dict(sequence_tmpl)
+    seq_data['read'] = reads.split('/')
+    # links sequence to patient and lab
+    referenced_patient = patient
+    referenced_lab = lab
+    seq_data['quality'] = 68.33
+    seq_data['patient'] = patient.get_reference()
+    seq_data['source']['lab'] = referenced_lab.get_reference()
+    # get name of the variant
+    variant_id = snp['id']
+    variant = variant_id if variant_id is not None else 'anonymous variant'
+    seq_data['text']['div']  = '<div>Genotype of %s is %s</div>'% (variant, reads)
+    print seq_data
+    sequence = save_resource('Sequence', seq_data)
     print 'Created SNP at %s:%s  %s'% (snp['chrom'], snp['pos'], seq_data['text']['div'])
     
-def load_snps_by_patients(patients, labs, snp_list):
+'''def load_snps_by_patients(patients, labs, snp_list):
     return {sample: create_snp_result(patients[sample], labs[sample], snp_list)
-        for sample in patients.keys()}
+        for sample in patients.keys()}'''
 
+def create_patient(is_clop_star, is_clop_snp, is_slco1b1_normal, is_slco1b1_on_med):
+    patient = rand_patient()
+    db.session.commit()
+    if is_clop_star or is_clop_snp:
+        clopdigorel_rx(patient, '75')
+        if is_clop_star:
+            make_star_variant(patient, CYP2C19_STAR_VARIANTS[0]['gene'], '*1/*1')
+        else:
+            lab = rand_lab(patient)
+            db.session.commit()
+            # Profile for a *2/*3 patient
+            create_snp_result(patient, lab, CYP2C19_SNPS[0], 'A/G')
+            create_snp_result(patient, lab, CYP2C19_SNPS[1], 'A/G')
+            create_snp_result(patient, lab, CYP2C19_SNPS[2], 'A/A')
+            create_snp_result(patient, lab, CYP2C19_SNPS[3], 'C/C')
+            create_snp_result(patient, lab, CYP2C19_SNPS[4], 'G/G')
+            create_snp_result(patient, lab, CYP2C19_SNPS[5], 'T/T')
+            create_snp_result(patient, lab, CYP2C19_SNPS[6], 'T/T')
+            create_snp_result(patient, lab, CYP2C19_SNPS[7], 'C/C')
+    else:
+        lab = rand_lab(patient)
+        db.session.commit()
+        if is_slco1b1_on_med:
+            simvastatin_rx(patient, '20')
+            create_snp_result(patient, lab, SLCO1B1_SNPS[0], 'C/C')
+        else:
+            create_snp_result(patient, lab, SLCO1B1_SNPS[0], 'T/T')
+        
 def load_vcf_example(vcf_file):
     reader = VCFReader(filename=vcf_file)
     patients = load_patients_by_samples(reader.samples)
@@ -321,6 +440,7 @@ def load_vcf_example(vcf_file):
             seq_data['source']['lab'] = referenced_lab.get_reference()
             # get name of the variant
             variant_id = record.ID
+            seq_data['snp'] = variant_id
             variant = variant_id if variant_id is not None else 'anonymous variant'
             seq_data['text']['div']  = '<div>Genotype of %s is %s</div>'% (variant, reads)
             #print seq_data
@@ -341,7 +461,6 @@ def load_vcf_example(vcf_file):
 
 
 def load_condition_from_file(path):
-    print path
     abspath = os.path.join(BASEDIR, 'examples/conditions', path)
     with open(abspath) as condition_f:
         return json.loads(condition_f.read())
@@ -363,5 +482,9 @@ def init_superuser():
 def load_examples():
     init_superuser()
     init_conditions()
-    for example_file in os.listdir(os.path.join(BASEDIR, 'examples/vcf')):
-        load_vcf_example(os.path.join(BASEDIR, 'examples/vcf', example_file))
+    create_patient(True, False, False, False)
+    create_patient(False, True, False, False)
+    create_patient(False, False, True, False)
+    create_patient(False, False, False, True)
+    #for example_file in os.listdir(os.path.join(BASEDIR, 'examples/vcf')):
+    #    load_vcf_example(os.path.join(BASEDIR, 'examples/vcf', example_file))
